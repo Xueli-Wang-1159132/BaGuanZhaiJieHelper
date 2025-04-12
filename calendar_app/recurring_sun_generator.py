@@ -6,8 +6,7 @@ from astral import LocationInfo
 from astral.sun import sun
 import pytz
 import calendar
-from skyfield import api
-from skyfield import almanac
+
 
 
 class RecurringSunEventGenerator:
@@ -20,7 +19,7 @@ class RecurringSunEventGenerator:
         self.start_year = start_year
         self.end_year = end_year
         self.timezone = pytz.timezone(timezone)
-        self.location = LocationInfo("Auckland", "NZ", timezone, -36.8485, 174.7633)
+        self.location = LocationInfo("Auckland", "NZ", timezone, -36.8440526109716, 174.7675260738167)
         self.events = []
 
     def _get_sun_times(self, dt):
@@ -85,7 +84,7 @@ class RecurringSunEventGenerator:
         sun_times = self._get_sun_times(dt)
         e = Event()
         e.name = "太阳时间提醒"
-        e.begin = dt
+        e.begin = sun_times['sunrise']['date_time']
         e.end = sun_times['next_sunrise']['date_time']
         e.description = (
             f"日出: {sun_times['sunrise']['str']}\n"
@@ -93,6 +92,9 @@ class RecurringSunEventGenerator:
             f"日落: {sun_times['sunset']['str']}\n"
             f"明日日出: {sun_times['next_sunrise']['str']}\n"
             f"总时长: {sun_times['sunrise_diff']['str']}\n"
+            f"注：由于不同经纬度以及海拔会导致时间有略微差异\n"
+            f"本次时间使用的是Auckland Britomart Train Station（36°84'40.4\"S 174°76'74.0\"E）的时间\n"
+            f"后续版本会增加地理位置信息以及海拔高度来提供更加准确的时间\n"
         )
 
         # 添加提前一天的三次提醒（24, 12, 1 小时前）
@@ -126,9 +128,14 @@ class RecurringSunEventGenerator:
                     continue  # 忽略不存在的日期，比如 2月30日
 
     def generate_by_quarter(self, which='first'):
+        """根据季度生成日历
+
+        Args:
+            which (str, optional): 每个季度的哪一天. Defaults to 'first'.
+        """
         month_day_map = {
             'first': (1, 1),  # 每季度第一个月第一天
-            'last': (3, 31)   # 每季度最后一个月最后一天（简单处理）
+            'last': (3, 31)   # 每季度最后一个月最后一天
         }
         for year in range(self.start_year, self.end_year + 1):
             for quarter_start_month in [1, 4, 7, 10]:
@@ -142,6 +149,16 @@ class RecurringSunEventGenerator:
                     continue
 
     def generate_by_weekday_rule(self, month, weekday, which='last'):
+        """根据周来生成
+
+        Args:
+            month (_type_): 月
+            weekday (_type_): 星期几
+            which (str, optional): 哪个星期. Defaults to 'last'.
+
+        Raises:
+            ValueError: 目前只支持第一个或最后一个
+        """
         for year in range(self.start_year, self.end_year + 1):
             cal = calendar.monthcalendar(year, month)
             if which == 'last':
