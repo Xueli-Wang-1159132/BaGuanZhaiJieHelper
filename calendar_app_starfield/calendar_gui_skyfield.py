@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import calendar
-from recurring_sun_generator_skyfield import RecurringSunEventGenerator  # 假设你已保存前面类为 recurring_sun_generator.py
+from BaGuanZhaiJieHelper.calendar_app_starfield.recurring_sun_generator_skyfield import RecurringSunEventGenerator  # 假设你已保存前面类为 recurring_sun_generator.py
 import ssl
 import certifi
 
