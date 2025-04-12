@@ -94,7 +94,7 @@ class RecurringSunEventGenerator:
             f"总时长: {sun_times['sunrise_diff']['str']}\n"
             f"注：由于不同经纬度以及海拔会导致时间有略微差异, 但几乎都在+-1分钟之内\n"
             f"本次时间使用的是Auckland Britomart Train Station（36°84'40.4\"S 174°76'74.0\"E）的时间\n"
-            f"后续版本会增加地理位置信息以及海拔高度来提供更加准确的时间\n"
+
         )
 
         # 添加提前一天的三次提醒（24, 12, 1 小时前）
