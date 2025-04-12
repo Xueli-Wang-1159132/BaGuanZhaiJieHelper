@@ -6,6 +6,8 @@ from astral import LocationInfo
 from astral.sun import sun
 import pytz
 import calendar
+from skyfield import api
+from skyfield import almanac
 
 
 class RecurringSunEventGenerator:
@@ -22,30 +24,75 @@ class RecurringSunEventGenerator:
         self.events = []
 
     def _get_sun_times(self, dt):
+        """返回包含时间差的双格式数据"""
         days = 1
-        next_day = dt +  relativedelta(days=days)
+        next_day = dt + relativedelta(days=days)
+        
+        # 月末处理逻辑
         if next_day.month != dt.month:
-            return next_day.replace(day=1) + relativedelta(days=days-1)
+            next_day = next_day.replace(day=1) + relativedelta(days=days-1)
+        
+        # 获取太阳时间数据
         s = sun(self.location.observer, date=dt.date(), tzinfo=self.timezone)
         s2 = sun(self.location.observer, date=next_day.date(), tzinfo=self.timezone)
+        
+        def format_diff(start, end):
+            """时间差格式化函数"""
+            try:
+                delta = end - start
+                if delta.total_seconds() < 0:
+                    raise ValueError("次日日出时间早于当日")
+                    
+                total_seconds = delta.total_seconds()
+                hours = int(total_seconds // 3600)
+                minutes = int((total_seconds % 3600) // 60)
+                
+                return {
+                    "str": f"{hours:02d}:{minutes:02d}",
+                    "hours": hours,
+                    "minutes": minutes,
+                    "total_minutes": hours * 60 + minutes
+                }
+            except TypeError:
+                return {
+                    "str": "N/A",
+                    "hours": 0,
+                    "minutes": 0,
+                    "total_minutes": 0
+                }
+        
+        def format_time(t):
+            return {
+                "str": t.strftime('%H:%M'),
+                "hour": t.hour,
+                "minute": t.minute,
+                "total_minutes": t.hour * 60 + t.minute,
+                "date_time": t
+            }
+        
+        sunrise_time = s["sunrise"]
+        next_sunrise_time = s2["sunrise"]
+        
         return {
-            "sunrise": s["sunrise"].strftime('%H:%M'),
-            "noon": s["noon"].strftime('%H:%M'),
-            "sunset": s["sunset"].strftime('%H:%M'),
-            "next_sunrise":s2["sunrise"].strftime('%H:%M')
+            "sunrise": format_time(sunrise_time),
+            "noon": format_time(s["noon"]),
+            "sunset": format_time(s["sunset"]),
+            "next_sunrise": format_time(next_sunrise_time),
+            "sunrise_diff": format_diff(sunrise_time, next_sunrise_time)
         }
-
+    
     def _add_event(self, dt: datetime):
         sun_times = self._get_sun_times(dt)
         e = Event()
         e.name = "太阳时间提醒"
         e.begin = dt
-        e.duration = timedelta(hours=24)
+        e.end = sun_times['next_sunrise']['date_time']
         e.description = (
-            f"日出: {sun_times['sunrise']}\n"
-            f"日中: {sun_times['noon']}\n"
-            f"日落: {sun_times['sunset']}\n"
-            f"明日日出: {sun_times['next_sunrise']}\n"
+            f"日出: {sun_times['sunrise']['str']}\n"
+            f"日中: {sun_times['noon']['str']}\n"
+            f"日落: {sun_times['sunset']['str']}\n"
+            f"明日日出: {sun_times['next_sunrise']['str']}\n"
+            f"总时长: {sun_times['sunrise_diff']['str']}\n"
         )
 
         # 添加提前一天的三次提醒（24, 12, 1 小时前）
@@ -56,15 +103,24 @@ class RecurringSunEventGenerator:
         self.events.append(e)
 
     def generate_by_monthly_day(self, day=1, months=range(1, 13)):
+        """_summary_
+        根据每月的几月几号创建事件
+
+        Args:
+            day (int, optional): 日期. Defaults to 1.
+            months (_type_, optional): 月份. Defaults to range(1, 13).
+        """
         for year in range(self.start_year, self.end_year + 1):
-            for month in months:
-                odt = datetime(year, month, day)
-                sun_times = self._get_sun_times(odt)['sunrise']
-                hours, minutes = map(int, sun_times.split(':'))
-                
+            for month in months:                
                 try:
-                    dt = datetime(year, month, day, hours, minutes)  # 默认上午 9 点事件
-                    dt = self.timezone.localize(dt)
+                    odt = self.timezone.localize(datetime(year, month, day))
+                    sun_times = self._get_sun_times(odt)
+                    sunrise = sun_times['sunrise']
+                    dt = datetime(
+                        year, month, day,
+                        sunrise['hour'],
+                        sunrise['minute']
+                    ).astimezone(self.timezone)
                     self._add_event(dt)
                 except ValueError:
                     continue  # 忽略不存在的日期，比如 2月30日
